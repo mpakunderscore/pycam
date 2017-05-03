@@ -1,17 +1,51 @@
+# http server
+
+import threading
+
+from SimpleHTTPServer import SimpleHTTPRequestHandler
+from BaseHTTPServer import HTTPServer
+
+PORT = 8000
+
+server = HTTPServer(("", PORT), SimpleHTTPRequestHandler)
+thread = threading.Thread(target = server.serve_forever)
+thread.daemon = True
+
+try:
+    thread.start()
+except KeyboardInterrupt:
+    server.shutdown()
+    sys.exit(0)
+
+print ("Serving at port", PORT)
+
+# end server
+
+
 import time
+import sys
 import picamera
 import picamera.array
-from PIL import Image
+# from PIL import Image
+
+width = 2560
+height = 1440
+
+# width = 3296
+# height = 1856
+
+# width = 1280
+# height = 720
+
+heating = 10
+training = 20
+
+inaccuracy = 20
 
 with picamera.PiCamera() as camera:
-    with picamera.array.PiRGBArray(camera) as output:
+    with picamera.array.PiRGBArray(camera, size=(width, height)) as output:
 
         print ("Init")
-
-        width = 3280/2
-        height = 2464/2
-
-        inaccuracy = 10
 
         ra = []
         ga = []
@@ -21,24 +55,24 @@ with picamera.PiCamera() as camera:
             ga.append(0)
             ba.append(0)
 
+        camera.hflip = True
+        camera.vflip = True
+        # camera.contrast = 50
+        # camera.brightness = 70
+        # camera.exposure_mode = "night"
+        camera.awb_mode = "off"
+        camera.awb_gains = 1.5
+
         camera.resolution = (width, height)
 
-        # camera.hflip = True
-        # camera.vflip = True
-        # camera.brightness = 70
+        # print ("Heating")
 
-        # Camera warm-up time
-        time.sleep(2)
+        camera.capture("cami.jpg")
 
         n = 0
-
-        training = 5
-
-        print ("Run")
-
         while True:
 
-            print ("--")
+            # print ("--")
 
             bias = 0
 
@@ -47,24 +81,41 @@ with picamera.PiCamera() as camera:
             camera.capture(output, "rgb")
 
             end1 = time.time()
-            print (end1 - start, "camera")
+            print (end1 - start)
 
-            im = Image.open("foo.jpg")
-            rgb_im = im.convert("RGB")
+            # print("Captured %dx%d image" % (
+            #     output.array.shape[1], output.array.shape[0]))
 
-            end2 = time.time()
-            print (end2 - end1, "image load")
+            # output.truncate(0)
+            # continue
+
+            # im = Image.open("foo.jpg")
+            # rgb_im = im.convert("RGB")
+
+            # if n < heating:
+            #     n = n + 1
+            #     output.truncate(0)
+            #     continue
 
             if n < training:
                 for i in range(0, width):
-                    r, g, b = rgb_im.getpixel((i, height / 2))
 
-                    ra[i] += r
-                    ga[i] += g
-                    ba[i] += b
+                    if i == width / 2:
 
-                print ("R: ", n)
+                        r = output.array[height / 2, i, 0]
+                        g = output.array[height / 2, i, 1]
+                        b = output.array[height / 2, i, 2]
+
+                        print ("RGB center: ", r, g, b)
+
+                    ra[i] += output.array[height/2, i, 0]
+                    ga[i] += output.array[height/2, i, 1]
+                    ba[i] += output.array[height/2, i, 2]
+
+                # print ("R", n)
                 n = n + 1
+                output.truncate(0)
+                continue
 
             if n == training:
                 for i in range(0, width):
@@ -72,29 +123,66 @@ with picamera.PiCamera() as camera:
                     ga[i] /= training
                     ba[i] /= training
 
-                print ("Remembered")
+                camera.capture("cam.jpg")
+
+                print ("Remembered", ra[width/2], ga[width/2], ba[width/2])
                 n = n + 1
+                output.truncate(0)
+                continue
 
             if n > training:
-                # for i in range(0, width):
 
-                    i = width / 2
+                marker = ""
 
-                    r, g, b = rgb_im.getpixel((i, height / 2))
+                distinction = 0
 
-                    # rdifference = ra[i] - r
-                    # gdifference = ra[i] - r
-                    # bdifference = ra[i] - r
+                row = 0
+                biggest = 0
 
-                    print ("RGB center: ", r, g, b, " | ", ra[i], ga[i], ba[i])
+                # for j in range(height / 2 - 10, height / 2 + 10):
 
-                    # if difference > inaccuracy or difference < -1 * inaccuracy:
-                    #     bias += 1
-                    # else:
-                    #     print "."
+                j = height / 2
 
-            # print bias
+                for i in range(0, width):
+
+                        r = output.array[j, i, 0]
+                        g = output.array[j, i, 1]
+                        b = output.array[j, i, 2]
+
+                        rd = abs(ra[i] - r)
+                        gd = abs(ga[i] - g)
+                        bd = abs(ba[i] - b)
+
+                        difference = (gd + bd) # rd +
+
+                        if i == width / 2:
+                            print ("RGB center:", r, g, b, difference)
+
+                        if difference > inaccuracy:
+                            distinction += 1
+                            row += 1
+                        else:
+                            row = 0
+
+                        if row > biggest:
+                            biggest = row
+
+                        if i % 15 == 0:
+                            if row > 5:
+                                marker += "|"
+                            else:
+                                marker += "."
+
+                    # print bias
 
 
+                print (distinction, biggest)
 
+                # print marker
+                print (marker)
 
+                output.truncate(0)
+
+                # end2 = time.time()
+                # print (end2 - end1, "image check")
+                continue
