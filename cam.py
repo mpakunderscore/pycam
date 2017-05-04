@@ -4,6 +4,7 @@ run()
 
 import time
 import sys
+import os
 import picamera
 import picamera.array
 
@@ -21,11 +22,12 @@ center = height / 2
 approach = 20
 
 # Do we train?
-training = True
+training = False
 
 # Available pixel difference
 accuracy = 20
 
+# Output state
 state = 0
 
 # Reference (r, g, b) arrays of the center line
@@ -36,7 +38,6 @@ for i in range(width):
     ra.append(0)
     ga.append(0)
     ba.append(0)
-
 
 # def settraining(val):
 #     global training
@@ -49,6 +50,7 @@ def train():
 
     global training
 
+    # First 2 for camera heating
     for n in range(2, approach):
 
         start = time.time()
@@ -63,7 +65,7 @@ def train():
                 g = output.array[center, i, 1]
                 b = output.array[center, i, 2]
 
-                print ("RGB center: ", r, g, b)
+                print ("RGB CENTER:", r, g, b)
 
             ra[i] += output.array[center, i, 0]
             ga[i] += output.array[center, i, 1]
@@ -71,14 +73,20 @@ def train():
 
         output.truncate(0)
 
+    reference = open("reference.txt", "w")
+
     for i in range(0, width):
-        ra[i] /= approach - 2
-        ga[i] /= approach - 2
-        ba[i] /= approach - 2
+        ra[i] /= (approach - 2)
+        ga[i] /= (approach - 2)
+        ba[i] /= (approach - 2)
+
+        reference.write("%s\n" % ra[i])
+        reference.write("%s\n" % ga[i])
+        reference.write("%s\n" % ba[i])
 
     camera.capture("cam.jpg")
 
-    print ("Remembered", ra[width / 2], ga[width / 2], ba[width / 2])
+    print ("R:", ra[width / 2], ga[width / 2], ba[width / 2])
 
     training = False
 
@@ -121,7 +129,7 @@ def check():
             # center
 
             if i == width / 2:
-                print ("RGB center:", r, g, b, "|", rd, gd, bd, "|", pixeldifference)
+                print ("RGB CENTER:", r, g, b, "|", rd, gd, bd, "|", pixeldifference)
 
             # all
 
@@ -150,6 +158,23 @@ def check():
         output.truncate(0)
 
 
+def readfile():
+    # Check if error here
+    reference = open("reference.txt", "r")
+    for i in range(0, width):
+
+        for i, line in enumerate(reference):
+
+            if i % 3 == 0:
+                ra[i / 3] = int(line.replace("\n", ""))
+
+            if i % 3 == 1:
+                ga[i / 3] = int(line.replace("\n", ""))
+
+            if i % 3 == 2:
+                ba[i / 3] = int(line.replace("\n", ""))
+
+
 with picamera.PiCamera() as camera:
     with picamera.array.PiRGBArray(camera, size=(width, height)) as output:
 
@@ -172,5 +197,13 @@ with picamera.PiCamera() as camera:
         # INFINITY
 
         # training
+
+        # print (os.stat("reference.txt").st_size)
+
+        if os.path.exists("reference.txt"):
+            readfile()
+
+        else:
+            training = True
 
         check()

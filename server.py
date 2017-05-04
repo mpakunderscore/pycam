@@ -5,8 +5,7 @@ from os import curdir, sep
 
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 
-# from cam import training
-# from cam import state
+# from cam import *
 
 PORT = 8000
 
@@ -61,7 +60,7 @@ def run():
 
     server = HTTPServer(("", PORT), CameraHandler)
     thread = threading.Thread(target = server.serve_forever)
-    # thread.daemon = True
+    thread.daemon = True
 
     try:
         thread.start()
